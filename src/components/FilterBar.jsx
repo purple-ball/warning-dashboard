@@ -33,6 +33,9 @@ export default function FilterBar({
   // 是否选中了省本级（此时无区县/乡镇层级，直接到谈话点）
   const isProvLevel = tempCity === '浙江省本级';
 
+  // 场景B：选了普通区县（非"本级"），直接跳过谈话点层级
+  const isNormalDistrict = tempDistrict !== '全部' && !tempDistrict.endsWith('本级');
+
   // 处理区县变化
   const handleDistrictChange = (e) => {
     setTempDistrict(e.target.value);
@@ -64,16 +67,29 @@ export default function FilterBar({
   const getTownOptions = () => {
     if (isProvLevel) return AREA_DATA.towns['浙江省本级'] || [];
     if (tempDistrict === '全部') return [];
+    // 场景B：普通区县时不显示谈话点层级
+    if (isNormalDistrict) return [];
     const towns = AREA_DATA.towns[tempDistrict] || [];
     if (tempDistrict.endsWith('本级')) return towns;
     const districtLevelOption = { id: 'district-level', name: `${tempDistrict}本级` };
     return [districtLevelOption, ...towns];
-  };
+  };;
 
   // 获取谈话间列表
   // tempTown 可能是普通谈话点，也可能是"安吉县本级"这类本级key
   // 本级key下没有直接的rooms，需从其子谈话点收集
   const getRoomOptions = () => {
+    // 场景B：普通区县时，第三级直接是谈话间
+    if (isNormalDistrict) {
+      const rooms = [];
+      const distLevelKey = `${tempDistrict}本级`;
+      (AREA_DATA.towns[distLevelKey] || []).forEach(point => {
+        (AREA_DATA.talkingRooms[point.name] || []).forEach(room => {
+          if (!rooms.includes(room)) rooms.push(room);
+        });
+      });
+      return rooms;
+    }
     if (tempTown === '全部') return [];
     const direct = AREA_DATA.talkingRooms[tempTown];
     if (direct) return direct;
@@ -84,7 +100,7 @@ export default function FilterBar({
       });
     });
     return rooms;
-  };
+  };;
 
   // 点击确定按钮
   const handleConfirm = () => {
@@ -143,7 +159,8 @@ export default function FilterBar({
           </select>
           )}
 
-          {/* 乡镇/本级（省本级时直接用省本级谈话点） */}
+          {/* 乡镇/本级（省本级时直接用省本级谈话点；场景B时隐藏） */}
+          {!isNormalDistrict && (
           <select
             value={tempTown}
             onChange={handleTownChange}
@@ -157,12 +174,13 @@ export default function FilterBar({
               </option>
             ))}
           </select>
+          )}
 
           {/* 谈话间 */}
           <select
             value={tempRoom}
             onChange={handleRoomChange}
-            disabled={tempTown === '全部'}
+            disabled={isNormalDistrict ? false : tempTown === '全部'}
             className="px-4 py-2 border border-blue-300 rounded-lg bg-white text-gray-800 cursor-pointer hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
           >
             <option value="全部">全部谈话间</option>

@@ -51,7 +51,6 @@ export default function App() {
   const getFilteredWarnings = () => {
     return warnings.filter((w) => {
       if (selectedCity === '浙江省本级') {
-        // 省本级：location 第一段为 '浙江省本级'
         if (w.location.split('/')[1] !== '浙江省本级') return false;
         if (selectedTown !== '全部' && w.town !== selectedTown) return false;
         if (selectedRoom !== '全部' && w.talkingRoom !== selectedRoom) return false;
@@ -59,20 +58,29 @@ export default function App() {
       }
       if (selectedCity !== '全部' && !w.location.includes(selectedCity)) return false;
       if (selectedDistrict !== '全部' && !w.location.includes(selectedDistrict)) return false;
-      if (selectedTown !== '全部' && w.town !== selectedTown) return false;
+      
+      // 场景B：普通区县时，town 应匹配区本级
+      const isNormalDistrict = selectedDistrict !== '全部' && !selectedDistrict.endsWith('本级');
+      if (isNormalDistrict) {
+        const expectedTown = `${selectedDistrict}本级`;
+        if (w.town !== expectedTown) return false;
+      } else {
+        if (selectedTown !== '全部' && w.town !== selectedTown) return false;
+      }
+      
       if (selectedRoom !== '全部' && w.talkingRoom !== selectedRoom) return false;
       return true;
     });
-  };
+  };;
 
   const filteredWarnings = getFilteredWarnings();
 
   // 计算当前页面的统计数据
   const getPageStats = () => {
     const totalWarnings = filteredWarnings.length;
-    const waitingCount = filteredWarnings.filter(w => w.status === '未标注').length;
-    const misreportCount = filteredWarnings.filter(w => w.status === '已标注-误报').length;
-    const processedCount = filteredWarnings.filter(w => w.status === '已标注-非误报' || w.status === '已标注-误报').length;
+    const waitingCount = filteredWarnings.filter(w => w.reviewStatus === '未复核').length;
+    const misreportCount = filteredWarnings.filter(w => w.reviewStatus === '误报').length;
+    const processedCount = filteredWarnings.filter(w => w.reviewStatus === '正确预警' || w.reviewStatus === '误报').length;
 
     return {
       totalWarnings,
@@ -81,7 +89,7 @@ export default function App() {
       misreportCount,
       warningList: filteredWarnings,
     };
-  };
+  };;
 
   // 获取柱状图数据
   const getChartData = () => {
@@ -141,6 +149,32 @@ export default function App() {
     }
 
     if (selectedCity !== '全部' && selectedDistrict !== '全部' && selectedTown === '全部') {
+      // 场景B：普通区县，直接显示谈话间排行
+      const isNormalDistrict = !selectedDistrict.endsWith('本级');
+      if (isNormalDistrict) {
+        // 场景B选了具体谈话间，隐藏柱状图
+        if (selectedRoom !== '全部') {
+          return { data: [], title: '', hideChart: true };
+        }
+        const distLevelKey = `${selectedDistrict}本级`;
+        let roomList = [];
+        (AREA_DATA.towns[distLevelKey] || []).forEach(point => {
+          (AREA_DATA.talkingRooms[point.name] || []).forEach(room => {
+            if (!roomList.includes(room)) roomList.push(room);
+          });
+        });
+        return {
+          data: roomList.map((room) => ({
+            name: room,
+            count: warnings.filter(w => w.talkingRoom === room && w.town === distLevelKey).length,
+            id: room,
+          })),
+          title: '谈话间预警排行',
+          hideChart: false,
+        };
+      }
+
+      // 场景A：市本级/区本级，显示谈话点排行
       const townList = AREA_DATA.towns[selectedDistrict] || [];
       return {
         data: townList.map((t) => ({
@@ -152,6 +186,7 @@ export default function App() {
         hideChart: false,
       };
     }
+
 
     if (selectedCity !== '全部' && selectedDistrict !== '全部' && selectedTown !== '全部' && selectedRoom === '全部') {
       // selectedTown 可能是"余杭区本级"这样的本级key，其rooms挂在下属谈话点上

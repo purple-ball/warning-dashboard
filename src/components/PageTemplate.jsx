@@ -209,9 +209,9 @@ export default function PageTemplate({
             <div className="bg-white rounded-lg shadow-md p-6">
               <h3 className="text-lg font-bold text-gray-800 mb-4">{chartTitle}</h3>
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={chartData}>
+                <BarChart data={chartData} margin={{ bottom: 60 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="name" stroke="#6b7280" />
+                  <XAxis dataKey="name" stroke="#6b7280" interval={0} angle={-35} textAnchor="end" tick={{ fontSize: 11 }} />
                   <YAxis stroke="#6b7280" />
                   <Tooltip
                     contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
@@ -499,7 +499,7 @@ export default function PageTemplate({
           {/* 分页 */}
           <div className="flex justify-between items-center mt-6 pt-4 border-t">
             <div className="text-sm text-gray-600">
-              共 {filteredWarningList.length} 条 | 每页 {itemsPerPage} 条 | 第 {currentPage} 页
+              共 {filteredWarningList.length} 条 | 每页 {itemsPerPage} 条 | 第 {currentPage}/{totalPages} 页
             </div>
             <div className="flex gap-2">
               <button
@@ -509,19 +509,27 @@ export default function PageTemplate({
               >
                 ◀ 上一页
               </button>
-              {Array.from({ length: Math.min(5, totalPages) }).map((_, i) => (
-                <button
-                  key={i + 1}
-                  onClick={() => setCurrentPage(i + 1)}
-                  className={`px-3 py-1 rounded transition-colors ${
-                    currentPage === i + 1
-                      ? 'bg-blue-600 text-white'
-                      : 'border border-gray-300 hover:bg-gray-100'
-                  }`}
-                >
-                  {i + 1}
-                </button>
-              ))}
+              {(() => {
+                const pages = [];
+                const maxVisible = 7;
+                let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+                let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+                if (endPage - startPage < maxVisible - 1) {
+                  startPage = Math.max(1, endPage - maxVisible + 1);
+                }
+                if (startPage > 1) {
+                  pages.push(<button key={1} onClick={() => setCurrentPage(1)} className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 transition-colors">1</button>);
+                  if (startPage > 2) { pages.push(<span key="ellipsis-start" className="px-2 text-gray-500">...</span>); }
+                }
+                for (let i = startPage; i <= endPage; i++) {
+                  pages.push(<button key={i} onClick={() => setCurrentPage(i)} className={`px-3 py-1 rounded transition-colors ${currentPage === i ? 'bg-blue-600 text-white' : 'border border-gray-300 hover:bg-gray-100'}`}>{i}</button>);
+                }
+                if (endPage < totalPages) {
+                  if (endPage < totalPages - 1) { pages.push(<span key="ellipsis-end" className="px-2 text-gray-500">...</span>); }
+                  pages.push(<button key={totalPages} onClick={() => setCurrentPage(totalPages)} className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 transition-colors">{totalPages}</button>);
+                }
+                return pages;
+              })()}
               <button
                 onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                 disabled={currentPage === totalPages}
