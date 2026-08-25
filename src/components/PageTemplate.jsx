@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import {
   BarChart, Bar, PieChart, Pie, Cell,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -123,7 +123,7 @@ export default function PageTemplate({
       <header className="bg-gradient-to-r from-blue-700 to-blue-900 shadow-lg">
         <div className="container mx-auto px-6 py-6">
           <div className="flex justify-between items-center">
-            <h1 className="text-3xl font-bold text-white">浙江省预警看板</h1>
+            <h1 className="text-3xl font-bold text-white">浙江省走读式谈话间数据看板工具平台</h1>
             <div className="text-sm text-blue-100">
               数据更新：2026-08-20 12:00
             </div>
