@@ -5,6 +5,7 @@ import {
 } from './mockData';
 import FilterBar from './components/FilterBar';
 import PageTemplate from './components/PageTemplate';
+import DetailPage from './components/DetailPage';
 import WarningModal from './components/WarningModal';
 import ReviewModal from './components/ReviewModal';
 
@@ -16,6 +17,7 @@ export default function App() {
   const [selectedWarning, setSelectedWarning] = useState(null);
   const [selectedReview, setSelectedReview] = useState(null);
   const [warnings, setWarnings] = useState(warningList);
+  const [currentView, setCurrentView] = useState('dashboard');
 
   const handleFilterConfirm = (filters) => {
     setSelectedCity(filters.city);
@@ -130,7 +132,7 @@ export default function App() {
           count: warnings.filter(w => w.location.includes(city.name)).length,
           id: city.id,
         })),
-        title: '地市预警排行',
+        title: '各地市预警数量分布',
         hideChart: false,
       };
     }
@@ -250,20 +252,30 @@ export default function App() {
 
   return (
     <div>
-      <PageTemplate
-        selectedCity={selectedCity}
-        selectedDistrict={selectedDistrict}
-        selectedTown={selectedTown}
-        selectedRoom={selectedRoom}
-        onFilterConfirm={handleFilterConfirm}
-        chartData={chartInfo.data}
-        chartTitle={chartInfo.title}
-        hideChart={chartInfo.hideChart}
-        onChartDetailClick={handleChartDetailClick}
-        pageData={pageData}
-        onWarningDetailClick={setSelectedWarning}
-        onReviewClick={handleReviewClick}
-      />
+      {currentView === 'dashboard' ? (
+        <PageTemplate
+          selectedCity={selectedCity}
+          selectedDistrict={selectedDistrict}
+          selectedTown={selectedTown}
+          selectedRoom={selectedRoom}
+          onFilterConfirm={handleFilterConfirm}
+          chartData={chartInfo.data}
+          chartTitle={chartInfo.title}
+          hideChart={chartInfo.hideChart}
+          onChartDetailClick={handleChartDetailClick}
+          pageData={pageData}
+          onWarningDetailClick={setSelectedWarning}
+          onReviewClick={handleReviewClick}
+          onOpenDetail={() => setCurrentView('detail')}
+        />
+      ) : (
+        <DetailPage
+          warnings={warnings}
+          onWarningDetailClick={setSelectedWarning}
+          onReviewClick={handleReviewClick}
+          onBack={() => setCurrentView('dashboard')}
+        />
+      )}
 
       <WarningModal
         warning={selectedWarning}

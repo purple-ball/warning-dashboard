@@ -702,7 +702,21 @@ function _genWarningList() {
   function push(city, district, town, room) {
     // generate 3 entries per room, cycling through types/statuses
     for (let i = 0; i < 3; i++) {
-      const typeCode = _TYPES[(n + i) % _TYPES.length];
+      const primaryCode = _TYPES[(n + i) % _TYPES.length];
+      // ~25% get 2 types, ~5% get 3 types (based on n+i mod 20)
+      const multiRand = (n + i) % 20;
+      let typeCodes;
+      if (multiRand < 1) {
+        // 3 types: pick 2 more different from primary
+        const others = _TYPES.filter(t => t !== primaryCode);
+        typeCodes = [primaryCode, others[(n + i) % others.length], others[(n + i + 1) % others.length]];
+      } else if (multiRand < 6) {
+        // 2 types: pick 1 more different from primary
+        const others = _TYPES.filter(t => t !== primaryCode);
+        typeCodes = [primaryCode, others[(n + i) % others.length]];
+      } else {
+        typeCodes = [primaryCode];
+      }
       const status = _STATUSES[(n + i) % _STATUSES.length];
       const date = _DATES[(n + i) % _DATES.length];
       const hour = _HOURS[(n + i) % _HOURS.length];
@@ -739,11 +753,11 @@ function _genWarningList() {
         location: `浙江/${city}/${district}`,
         town,
         talkingRoom: room,
-        type: typeCode,
-        typeName: WARNING_TYPES[typeCode],
+        types: typeCodes,
+        typeNames: typeCodes.map(c => WARNING_TYPES[c]),
         misreportTag: status === '已标注-误报',
         status,
-        content: _CONTENTS[typeCode][(n + i) % _CONTENTS[typeCode].length],
+        content: _CONTENTS[primaryCode][(n + i) % _CONTENTS[primaryCode].length],
         audio: `/audio/warning-${String(n).padStart(4, '0')}.mp3`,
         reviewStatus,
         reviewPerson,

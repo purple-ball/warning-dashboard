@@ -1,28 +1,62 @@
-﻿import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   BarChart, Bar, PieChart, Pie, Cell,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
-import { statistics, trend30days, trend90days, WARNING_TYPES } from '../mockData';
+import { AREA_DATA, WARNING_TYPES } from '../mockData';
 import FilterBar from './FilterBar';
 
+const COLORS = ['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', '#06b6d4', '#ec4899', '#f97316'];
+
+function TRBtn({ value, current, onChange }) {
+  const labels = { '7days': '近7天', '30days': '近30天', '90days': '近90天' };
+  return (
+    <button onClick={() => onChange(value)}
+      className={`px-3 py-1 text-xs rounded-md transition-colors ${current === value ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+      {labels[value]}
+    </button>
+  );
+}
+
+function buildTrend(list, tabTimeRange) {
+  const days = tabTimeRange === '7days' ? 7 : tabTimeRange === '30days' ? 30 : 90;
+  const dateCounts = {};
+  const processedByDate = {};
+  const missByDate = {};
+  list.forEach(w => {
+    const date = w.time.split(' ')[0];
+    dateCounts[date] = (dateCounts[date] || 0) + 1;
+    if (w.reviewStatus === '正确预警' || w.reviewStatus === '误报') {
+      processedByDate[date] = (processedByDate[date] || 0) + 1;
+    }
+    if (w.reviewStatus === '误报') {
+      missByDate[date] = (missByDate[date] || 0) + 1;
+    }
+  });
+  const result = [];
+  const today = new Date('2026-08-20');
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const dateStr = d.toISOString().split('T')[0];
+    const monthDay = `${d.getMonth() + 1}.${d.getDate()}`;
+    const count = dateCounts[dateStr] || 0;
+    const processed = processedByDate[dateStr] || 0;
+    const miss = missByDate[dateStr] || 0;
+    const misreportRate = processed > 0 ? +((miss / processed) * 100).toFixed(1) : 0;
+    result.push({ date: monthDay, count, misreportRate });
+  }
+  return result;
+}
+
 export default function PageTemplate({
-  selectedCity,
-  selectedDistrict,
-  selectedTown,
-  selectedRoom,
-  onFilterConfirm,
-  chartData,
-  chartTitle,
-  hideChart,
-  onChartDetailClick,
-  pageData,
-  onWarningDetailClick,
-  onReviewClick,
+  selectedCity, selectedDistrict, selectedTown, selectedRoom,
+  onFilterConfirm, chartData, chartTitle, hideChart, onChartDetailClick,
+  pageData, onWarningDetailClick, onReviewClick, onOpenDetail,
 }) {
   const [currentPage, setCurrentPage] = useState(1);
-  const [timeRange, setTimeRange] = useState('7days');
+  const [tabTimeRange, setTabTimeRange] = useState('7days');
   const itemsPerPage = 10;
 
   const [filterReviewStatus, setFilterReviewStatus] = useState('全部');
@@ -31,63 +65,40 @@ export default function PageTemplate({
   const [filterDateStart, setFilterDateStart] = useState('2026-08-14');
   const [filterDateEnd, setFilterDateEnd] = useState('2026-08-20');
   const [appliedFilters, setAppliedFilters] = useState({
-    reviewStatus: '全部',
-    validity: '全部',
-    warningType: '全部',
-    dateStart: '2026-08-14',
-    dateEnd: '2026-08-20',
+    reviewStatus: '全部', validity: '全部', warningType: '全部',
+    dateStart: '2026-08-14', dateEnd: '2026-08-20',
   });
 
-  const trendData = (() => {
-    const filteredList = pageData?.warningList || [];
-    const days = timeRange === '7days' ? 7 : timeRange === '30days' ? 30 : 90;
-    const dateCounts = {};
-    filteredList.forEach(w => {
-      const date = w.time.split(' ')[0];
-      dateCounts[date] = (dateCounts[date] || 0) + 1;
-    });
-    const result = [];
-    const today = new Date('2026-08-20');
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(today);
-      d.setDate(today.getDate() - i);
-      const dateStr = d.toISOString().split('T')[0];
-      const monthDay = `${d.getMonth() + 1}.${d.getDate()}`;
-      result.push({ date: monthDay, count: dateCounts[dateStr] || 0 });
-    }
-    return result;
-  })();
+  const [activeTab, setActiveTab] = useState('overview');
+  const [activeDonut, setActiveDonut] = useState(null);
+  const [overviewSortBy, setOverviewSortBy] = useState('total');
+  const [overviewSortDir, setOverviewSortDir] = useState('desc');
+  const [typeSortBy, setTypeSortBy] = useState('total');
+  const [typeSortDir, setTypeSortDir] = useState('desc');
 
-  const typeData = (() => {
-    const counts = {};
-    (pageData?.warningList || []).forEach(w => {
-      counts[w.type] = (counts[w.type] || 0) + 1;
-    });
-    return Object.entries(counts).map(([code, count]) => ({
-      name: WARNING_TYPES[code] || code,
-      value: count,
-    }));
-  })();
+  const allWarnings = pageData?.warningList || [];
 
-  const COLORS = ['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', '#06b6d4', '#ec4899', '#f97316'];
+  const handleDonutClick = (_, index) => {
+    if (index >= typeData.length) return;
+    const { code } = typeData[index];
+    setActiveDonut(code);
+    setActiveTab(code);
+  };
 
   const applyListFilters = () => {
     setAppliedFilters({
-      reviewStatus: filterReviewStatus,
-      validity: filterValidity,
-      warningType: filterWarningType,
-      dateStart: filterDateStart,
-      dateEnd: filterDateEnd,
+      reviewStatus: filterReviewStatus, validity: filterValidity,
+      warningType: filterWarningType, dateStart: filterDateStart, dateEnd: filterDateEnd,
     });
     setCurrentPage(1);
   };
 
-  const filteredWarningList = (pageData?.warningList || []).filter(w => {
+  const filteredWarningList = allWarnings.filter(w => {
     if (appliedFilters.reviewStatus === '未复核' && w.reviewStatus !== '未复核') return false;
     if (appliedFilters.reviewStatus === '已复核' && w.reviewStatus === '未复核') return false;
     if (appliedFilters.validity === '正确预警' && w.reviewStatus !== '正确预警') return false;
     if (appliedFilters.validity === '误报' && w.reviewStatus !== '误报') return false;
-    if (appliedFilters.warningType !== '全部' && w.type !== appliedFilters.warningType) return false;
+    if (appliedFilters.warningType !== '全部' && !(w.types || [w.type]).includes(appliedFilters.warningType)) return false;
     const wDate = w.time.split(' ')[0];
     if (wDate < appliedFilters.dateStart || wDate > appliedFilters.dateEnd) return false;
     return true;
@@ -98,8 +109,169 @@ export default function PageTemplate({
   const displayData = filteredWarningList.slice(startIdx, startIdx + itemsPerPage);
 
   const misreportRate = pageData?.processedCount > 0
-    ? ((pageData.misreportCount / pageData.processedCount) * 100).toFixed(1)
-    : 0;
+    ? ((pageData.misreportCount / pageData.processedCount) * 100).toFixed(1) : 0;
+
+  const typeData = useMemo(() => {
+    const counts = {};
+    allWarnings.forEach(w => {
+      (w.types || [w.type]).forEach(code => {
+        counts[code] = (counts[code] || 0) + 1;
+      });
+    });
+    return Object.entries(counts).map(([code, value]) => ({
+      name: WARNING_TYPES[code] || code,
+      value,
+      code,
+    }));
+  }, [allWarnings]);
+
+  const overviewTrend = useMemo(() => buildTrend(allWarnings, tabTimeRange), [allWarnings, tabTimeRange]);
+
+  const typeTrend = useMemo(() => {
+    if (activeTab === 'overview') return [];
+    return buildTrend(allWarnings.filter(w => (w.types || [w.type]).includes(activeTab)), tabTimeRange);
+  }, [activeTab, allWarnings, tabTimeRange]);
+
+  const typeRegionData = useMemo(() => {
+    if (activeTab === 'overview') return { pie: [], bar: [] };
+    const filtered = allWarnings.filter(w => (w.types || [w.type]).includes(activeTab));
+    const regionCounts = {};
+    const regionProcessed = {};
+    const regionMiss = {};
+
+    filtered.forEach(w => {
+      const parts = w.location.split('/');
+      const region = parts[1] || '未知';
+      regionCounts[region] = (regionCounts[region] || 0) + 1;
+      if (w.reviewStatus === '正确预警' || w.reviewStatus === '误报') {
+        regionProcessed[region] = (regionProcessed[region] || 0) + 1;
+      }
+      if (w.reviewStatus === '误报') {
+        regionMiss[region] = (regionMiss[region] || 0) + 1;
+      }
+    });
+
+    const pie = Object.entries(regionCounts)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 8);
+
+    const totalRegion = pie.reduce((sum, p) => sum + p.value, 0);
+    const pieWithPercent = pie.map(p => ({
+      ...p,
+      percent: totalRegion > 0 ? (p.value / totalRegion) : 0
+    }));
+
+    const bar = Object.entries(regionCounts)
+      .map(([name, total]) => {
+        const processed = regionProcessed[name] || 0;
+        const miss = regionMiss[name] || 0;
+        const rate = processed > 0 ? +((miss / processed) * 100).toFixed(1) : 0;
+        return { name, rate, total };
+      })
+      .filter(d => d.total > 0)
+      .sort((a, b) => b.rate - a.rate)
+      .slice(0, 8);
+
+    return { pie: pieWithPercent, bar };
+  }, [activeTab, allWarnings]);
+
+  const globalRegionMisreport = useMemo(() => {
+    const regionCounts = {};
+    const regionProcessed = {};
+    const regionMiss = {};
+
+    allWarnings.forEach(w => {
+      const parts = w.location.split('/');
+      const region = parts[1] || '未知';
+      regionCounts[region] = (regionCounts[region] || 0) + 1;
+      if (w.reviewStatus === '正确预警' || w.reviewStatus === '误报') {
+        regionProcessed[region] = (regionProcessed[region] || 0) + 1;
+      }
+      if (w.reviewStatus === '误报') {
+        regionMiss[region] = (regionMiss[region] || 0) + 1;
+      }
+    });
+
+    return Object.entries(regionCounts)
+      .map(([name, total]) => {
+        const processed = regionProcessed[name] || 0;
+        const miss = regionMiss[name] || 0;
+        const rate = processed > 0 ? +((miss / processed) * 100).toFixed(1) : 0;
+        return { name, rate, total };
+      })
+      .filter(d => d.total > 0)
+      .sort((a, b) => b.rate - a.rate)
+      .slice(0, 8);
+  }, [allWarnings]);
+
+  const sortedGlobalRanking = useMemo(() => {
+    return [...globalRegionMisreport].sort((a, b) => {
+      const key = overviewSortBy === 'total' ? 'total' : 'rate';
+      return overviewSortDir === 'desc' ? b[key] - a[key] : a[key] - b[key];
+    });
+  }, [globalRegionMisreport, overviewSortBy, overviewSortDir]);
+
+  const sortedTypeRanking = useMemo(() => {
+    return [...typeRegionData.bar].sort((a, b) => {
+      const key = typeSortBy === 'total' ? 'total' : 'rate';
+      return typeSortDir === 'desc' ? b[key] - a[key] : a[key] - b[key];
+    });
+  }, [typeRegionData.bar, typeSortBy, typeSortDir]);
+
+  const activeTypeName = activeTab !== 'overview' ? WARNING_TYPES[activeTab] : '';
+  const activeTypeColor = activeTab !== 'overview'
+    ? COLORS[typeData.findIndex(t => t.code === activeTab) % COLORS.length]
+    : '#3b82f6';
+
+  const RankList = ({ items, sortBy, sortDir, onSortBy, onSortDir, title }) => {
+    const half = Math.ceil(items.length / 2);
+    const left = items.slice(0, half);
+    const right = items.slice(half);
+    const SortBtn = ({ field, label }) => (
+      <button
+        onClick={() => {
+          if (sortBy === field) { onSortDir(sortDir === 'desc' ? 'asc' : 'desc'); }
+          else { onSortBy(field); onSortDir('desc'); }
+        }}
+        className={`px-2 py-0.5 text-xs rounded transition-colors ${sortBy === field ? 'bg-blue-100 text-blue-700 font-medium' : 'text-gray-400 hover:bg-gray-100'}`}
+      >
+        {label}{sortBy === field ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''}
+      </button>
+    );
+    const Row = ({ item, rank }) => (
+      <div className="flex items-center justify-between px-1 py-1 rounded hover:bg-gray-50 text-xs">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <span className={`w-4 h-4 rounded flex-shrink-0 flex items-center justify-center text-[10px] font-bold ${rank === 1 ? 'bg-red-500 text-white' : rank === 2 ? 'bg-orange-400 text-white' : rank === 3 ? 'bg-amber-400 text-white' : 'bg-gray-200 text-gray-500'}`}>{rank}</span>
+          <span className="text-gray-700 truncate">{item.name}</span>
+        </div>
+        <div className="flex gap-3 flex-shrink-0">
+          <span className="w-16 text-right text-gray-400">{item.total.toLocaleString()} 条</span>
+          <span className="w-10 text-right font-medium text-gray-700">{item.rate}%</span>
+        </div>
+      </div>
+    );
+    return (
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-semibold text-gray-700">{title}</span>
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-gray-400">排序：</span>
+            <SortBtn field="total" label="总数" />
+            <SortBtn field="rate" label="误报率" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-x-4">
+          <div className="space-y-0.5">
+            {left.map((item, i) => <Row key={item.name} item={item} rank={i + 1} />)}
+          </div>
+          <div className="space-y-0.5">
+            {right.map((item, i) => <Row key={item.name} item={item} rank={half + i + 1} />)}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -119,20 +291,16 @@ export default function PageTemplate({
       </header>
 
       <FilterBar
-        selectedCity={selectedCity}
-        selectedDistrict={selectedDistrict}
-        selectedTown={selectedTown}
-        selectedRoom={selectedRoom}
-        onFilterChange={() => {}}
-        onConfirm={onFilterConfirm}
+        selectedCity={selectedCity} selectedDistrict={selectedDistrict}
+        selectedTown={selectedTown} selectedRoom={selectedRoom}
+        onFilterChange={() => {}} onConfirm={onFilterConfirm}
       />
 
       <div className="mx-auto px-6 py-5 max-w-[1800px]">
 
-        {/* Row 1: stat cards + pie + bar */}
+        {/* Row 1: stat cards + entry card + bar chart */}
         <div className="grid grid-cols-12 gap-4 mb-4">
-
-          <div className="col-span-5 grid grid-cols-2 gap-4">
+          <div className="col-span-4 grid grid-cols-2 gap-4">
             <div className="bg-white rounded-xl shadow-sm border-t-4 border-blue-600 px-5 py-4 flex flex-col justify-between">
               <p className="text-gray-500 text-xs font-medium">预警总数</p>
               <p className="text-4xl font-extrabold text-blue-600 mt-1 leading-none">
@@ -163,27 +331,23 @@ export default function PageTemplate({
             </div>
           </div>
 
-          <div className="col-span-4 bg-white rounded-xl shadow-sm p-4">
-            <h3 className="text-sm font-semibold text-gray-700 mb-1">预警类型分布</h3>
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie data={typeData} cx="38%" cy="50%" labelLine={false} outerRadius={85} dataKey="value">
-                  {typeData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: 12 }} />
-                <Legend layout="vertical" align="right" verticalAlign="middle" iconType="circle" iconSize={8}
-                  formatter={(value) => <span style={{ fontSize: 11, color: '#374151' }}>{value}</span>} />
-              </PieChart>
-            </ResponsiveContainer>
+          {/* Entry card */}
+          <div
+            onClick={onOpenDetail}
+            className="col-span-2 bg-white rounded-xl shadow-sm border-t-4 border-blue-400 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-blue-50 hover:border-blue-600 transition-all group"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-7 h-7 text-blue-400 group-hover:text-blue-600 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+            <p className="text-sm font-semibold text-gray-700 text-center leading-snug group-hover:text-blue-700">全量预警明细</p>
+            <p className="text-xs text-gray-400 group-hover:text-blue-500">点击查看/复核</p>
           </div>
 
           {!hideChart && (
-            <div className="col-span-3 bg-white rounded-xl shadow-sm p-4">
-              <h3 className="text-sm font-semibold text-gray-700 mb-1">{chartTitle}</h3>
+            <div className="col-span-6 bg-white rounded-xl shadow-sm p-4">
+              <h3 className="text-sm font-semibold text-gray-700 mb-2">{chartTitle}</h3>
               <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={chartData} margin={{ left: -20, bottom: 55 }}>
+                <BarChart data={chartData} margin={{ left: -15, bottom: 55, right: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis dataKey="name" stroke="#6b7280" interval={0} angle={-35} textAnchor="end" tick={{ fontSize: 10 }} />
                   <YAxis stroke="#6b7280" tick={{ fontSize: 11 }} />
@@ -193,143 +357,155 @@ export default function PageTemplate({
               </ResponsiveContainer>
             </div>
           )}
+          {hideChart && <div className="col-span-6" />}
         </div>
 
-        {/* Row 2: trend chart */}
-        <div className="bg-white rounded-xl shadow-sm p-4 mb-4">
-          <div className="flex justify-between items-center mb-2">
-            <h3 className="text-sm font-semibold text-gray-700">预警趋势</h3>
-            <div className="flex gap-1.5">
-              {['7days', '30days', '90days'].map((r) => (
-                <button key={r} onClick={() => setTimeRange(r)}
-                  className={`px-3 py-1 text-xs rounded-md transition-colors ${timeRange === r ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                  {r === '7days' ? '近7天' : r === '30days' ? '近30天' : '近90天'}
-                </button>
-              ))}
+        {/* Row 2: donut (left) + content panel (right) */}
+        <div className="grid grid-cols-12 gap-4 mb-4">
+          <div className="col-span-4 bg-white rounded-xl shadow-sm p-4 flex flex-col">
+            <h3 className="text-sm font-semibold text-gray-700 mb-2">预警类型分布</h3>
+            <div className="flex-1 flex items-center justify-center">
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie
+                    data={typeData}
+                    cx="40%" cy="50%"
+                    innerRadius={55} outerRadius={85}
+                    dataKey="value"
+                    onClick={handleDonutClick}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    {typeData.map((entry, index) => (
+                      <Cell
+                        key={entry.code}
+                        fill={COLORS[index % COLORS.length]}
+                        opacity={activeDonut && entry.code !== activeDonut ? 0.3 : 1}
+                        stroke={activeDonut === entry.code ? '#1d4ed8' : 'none'}
+                        strokeWidth={activeDonut === entry.code ? 2 : 0}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8 }} formatter={(value, name) => [value + ' 条', name]} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="space-y-0.5 mt-1">
+              {typeData.map((entry, index) => {
+                const total = typeData.reduce((sum, d) => sum + d.value, 0);
+                const percent = total > 0 ? ((entry.value / total) * 100).toFixed(1) : '0.0';
+                return (
+                  <div
+                    key={entry.code}
+                    onClick={() => handleDonutClick(null, index)}
+                    className="flex items-center justify-between px-2 py-1 rounded hover:bg-gray-50 cursor-pointer text-xs"
+                    style={{ opacity: activeDonut && entry.code !== activeDonut ? 0.5 : 1 }}
+                  >
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }}></span>
+                      <span className="text-gray-700 truncate">{entry.name}</span>
+                    </div>
+                    <span className="text-gray-500 ml-2 flex-shrink-0">{percent}%</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={180}>
-            <LineChart data={trendData} margin={{ left: -10, right: 20, bottom: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="date" stroke="#6b7280" tick={{ fontSize: 11 }} interval={timeRange === '7days' ? 0 : 'preserveStartEnd'} />
-              <YAxis stroke="#6b7280" tick={{ fontSize: 11 }} />
-              <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: 12 }} cursor={{ stroke: '#3b82f6', strokeWidth: 1.5 }} />
-              <Line type="monotone" dataKey="count" stroke="#3b82f6" strokeWidth={2} dot={{ fill: '#3b82f6', r: 3 }} activeDot={{ r: 6 }} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
 
-        {/* Row 3: warning list */}
-        <div className="bg-white rounded-xl shadow-sm p-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">预警列表</h3>
-
-          <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-            <div className="flex gap-3 items-end flex-wrap">
-              <div className="w-28">
-                <label className="block text-xs text-gray-500 mb-1">是否复核</label>
-                <select value={filterReviewStatus} onChange={(e) => { setFilterReviewStatus(e.target.value); if (e.target.value === '未复核') setFilterValidity('全部'); }}
-                  className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="全部">全部</option>
-                  <option value="未复核">未复核</option>
-                  <option value="已复核">已复核</option>
-                </select>
-              </div>
-              <div className="w-28">
-                <label className="block text-xs text-gray-500 mb-1">是否属实</label>
-                <select value={filterReviewStatus === '未复核' ? '--' : filterValidity} onChange={(e) => setFilterValidity(e.target.value)} disabled={filterReviewStatus === '未复核'}
-                  className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed">
-                  {filterReviewStatus === '未复核' ? <option value="--">--</option> : (<><option value="全部">全部</option><option value="正确预警">正确预警</option><option value="误报">误报</option></>)}
-                </select>
-              </div>
-              <div className="w-36">
-                <label className="block text-xs text-gray-500 mb-1">异常内容</label>
-                <select value={filterWarningType} onChange={(e) => setFilterWarningType(e.target.value)}
-                  className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="全部">全部</option>
-                  {Object.entries(WARNING_TYPES).map(([code, name]) => (<option key={code} value={code}>{name}</option>))}
-                </select>
-              </div>
-              <div className="flex-1 min-w-[220px]">
-                <label className="block text-xs text-gray-500 mb-1">谈话日期</label>
-                <div className="flex items-center gap-2">
-                  <input type="date" value={filterDateStart} onChange={(e) => setFilterDateStart(e.target.value)}
-                    className="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                  <span className="text-gray-400 text-xs">—</span>
-                  <input type="date" value={filterDateEnd} onChange={(e) => setFilterDateEnd(e.target.value)}
-                    className="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          {/* Content panel (no tabs, just view toggle) */}
+          <div className="col-span-8 bg-white rounded-xl shadow-sm flex flex-col">
+            <div className="flex-1 p-4 overflow-auto">
+              {activeTab === 'overview' ? (
+                <div className="h-full flex flex-col">
+                  <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                    <p className="text-sm text-blue-700 leading-relaxed">
+                      点击左侧环形图中任意预警类型，可查看该类型各地区误报数/误报率排行及趋势分析。
+                    </p>
+                  </div>
+                  <div className="mb-4">
+                    <RankList
+                      items={sortedGlobalRanking}
+                      sortBy={overviewSortBy}
+                      sortDir={overviewSortDir}
+                      onSortBy={setOverviewSortBy}
+                      onSortDir={setOverviewSortDir}
+                      title="全部预警各地区误报数/误报率排行"
+                    />
+                  </div>
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="text-sm font-semibold text-gray-700">全局趋势</span>
+                    <div className="flex gap-1.5">
+                      {['7days','30days','90days'].map(r => <TRBtn key={r} value={r} current={tabTimeRange} onChange={setTabTimeRange} />)}
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={overviewTrend} margin={{ left: -5, right: 20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis dataKey="date" stroke="#6b7280" tick={{ fontSize: 10 }} interval={tabTimeRange === '7days' ? 0 : 'preserveStartEnd'} />
+                        <YAxis yAxisId="left" stroke="#6b7280" tick={{ fontSize: 10 }} />
+                        <YAxis yAxisId="right" orientation="right" stroke="#6b7280" tick={{ fontSize: 10 }} tickFormatter={v => v + '%'} />
+                        <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: 11 }} />
+                        <Legend iconSize={8} wrapperStyle={{ fontSize: 11 }} />
+                        <Line yAxisId="left" type="monotone" dataKey="count" name="预警数" stroke="#3b82f6" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                        <Line yAxisId="right" type="monotone" dataKey="misreportRate" name="误报率%" stroke="#ef4444" strokeWidth={1.5} dot={false} activeDot={{ r: 4 }} strokeDasharray="4 2" />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
-              </div>
-              <button onClick={applyListFilters} className="px-5 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium whitespace-nowrap">查询</button>
-            </div>
-          </div>
+              ) : (
+                <div className="h-full flex flex-col">
+                  <div className="flex items-center gap-3 mb-3">
+                    <button
+                      onClick={() => { setActiveTab('overview'); setActiveDonut(null); }}
+                      className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium flex-shrink-0"
+                    >
+                      ← 返回总览
+                    </button>
+                    <span className="text-gray-300 text-sm">|</span>
+                    <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: activeTypeColor }}></span>
+                      {activeTypeName} — 详情分析
+                    </h4>
+                  </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="bg-gradient-to-r from-blue-700 to-blue-800 text-white">
-                  <th className="px-2 py-2.5 text-center font-medium">序号</th>
-                  <th className="px-2 py-2.5 text-center font-medium">谈话间号</th>
-                  <th className="px-3 py-2.5 text-center font-medium">谈话地点</th>
-                  <th className="px-2 py-2.5 text-center font-medium">异常内容</th>
-                  <th className="px-3 py-2.5 text-center font-medium">异常时间</th>
-                  <th className="px-2 py-2.5 text-center font-medium">复核状态</th>
-                  <th className="px-2 py-2.5 text-center font-medium">复核人员</th>
-                  <th className="px-3 py-2.5 text-center font-medium">复核时间</th>
-                  <th className="px-2 py-2.5 text-center font-medium">操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {displayData.map((warning, idx) => (
-                  <tr key={warning.id} className={`border-b border-gray-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-blue-50/40'} hover:bg-blue-50 transition-colors`}>
-                    <td className="px-2 py-2 text-gray-500 text-center">{startIdx + idx + 1}</td>
-                    <td className="px-2 py-2 text-gray-800 text-center whitespace-nowrap font-medium">{warning.talkingRoom}</td>
-                    <td className="px-3 py-2 text-gray-600 text-center whitespace-nowrap">{warning.location}</td>
-                    <td className="px-2 py-2 text-center">
-                      <span className="inline-block px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded text-xs font-medium whitespace-nowrap">{warning.typeName}</span>
-                    </td>
-                    <td className="px-3 py-2 text-gray-600 text-center whitespace-nowrap">{warning.time}</td>
-                    <td className="px-2 py-2 text-center">
-                      <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap ${warning.reviewStatus === '未复核' ? 'bg-gray-100 text-gray-500' : warning.reviewStatus === '误报' ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'}`}>
-                        {warning.reviewStatus}
-                      </span>
-                    </td>
-                    <td className="px-2 py-2 text-gray-600 text-center whitespace-nowrap">{warning.reviewPerson || '—'}</td>
-                    <td className="px-3 py-2 text-gray-600 text-center whitespace-nowrap">{warning.reviewTime || '—'}</td>
-                    <td className="px-2 py-2 text-center">
-                      <div className="flex gap-2 justify-center whitespace-nowrap">
-                        <button onClick={() => onWarningDetailClick(warning)} className="text-blue-600 hover:text-blue-800 hover:underline transition-colors">详情</button>
-                        <button onClick={() => onReviewClick(warning)} className="text-blue-600 hover:text-blue-800 hover:underline transition-colors">复核</button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                  <div className="mb-4">
+                    <RankList
+                      items={sortedTypeRanking}
+                      sortBy={typeSortBy}
+                      sortDir={typeSortDir}
+                      onSortBy={setTypeSortBy}
+                      onSortDir={setTypeSortDir}
+                      title="该预警各地区误报数/误报率排行"
+                    />
+                  </div>
 
-          <div className="flex justify-between items-center mt-4 pt-3 border-t border-gray-100">
-            <div className="text-xs text-gray-400">
-              共 <span className="font-medium text-gray-600">{filteredWarningList.length}</span> 条 &nbsp;|&nbsp; 每页 {itemsPerPage} 条 &nbsp;|&nbsp; 第 {currentPage}/{totalPages} 页
-            </div>
-            <div className="flex gap-1.5">
-              <button onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1}
-                className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">◀ 上一页</button>
-              {(() => {
-                const pages = [];
-                const maxVisible = 7;
-                let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
-                let endPage = Math.min(totalPages, startPage + maxVisible - 1);
-                if (endPage - startPage < maxVisible - 1) startPage = Math.max(1, endPage - maxVisible + 1);
-                if (startPage > 1) { pages.push(<button key={1} onClick={() => setCurrentPage(1)} className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-100 transition-colors">1</button>); if (startPage > 2) pages.push(<span key="e1" className="px-1 text-gray-400 text-xs">...</span>); }
-                for (let i = startPage; i <= endPage; i++) { pages.push(<button key={i} onClick={() => setCurrentPage(i)} className={`px-3 py-1 text-xs rounded transition-colors ${currentPage === i ? 'bg-blue-600 text-white' : 'border border-gray-300 hover:bg-gray-100'}`}>{i}</button>); }
-                if (endPage < totalPages) { if (endPage < totalPages - 1) pages.push(<span key="e2" className="px-1 text-gray-400 text-xs">...</span>); pages.push(<button key={totalPages} onClick={() => setCurrentPage(totalPages)} className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-100 transition-colors">{totalPages}</button>); }
-                return pages;
-              })()}
-              <button onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages}
-                className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">下一页 ▶</button>
+                  {/* Type trend */}
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-sm font-semibold text-gray-700">该类型趋势</span>
+                    <div className="flex gap-1.5">
+                      {['7days','30days','90days'].map(r => <TRBtn key={r} value={r} current={tabTimeRange} onChange={setTabTimeRange} />)}
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={typeTrend} margin={{ left: -5, right: 20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis dataKey="date" stroke="#6b7280" tick={{ fontSize: 10 }} interval={tabTimeRange === '7days' ? 0 : 'preserveStartEnd'} />
+                        <YAxis yAxisId="left" stroke="#6b7280" tick={{ fontSize: 10 }} />
+                        <YAxis yAxisId="right" orientation="right" stroke="#6b7280" tick={{ fontSize: 10 }} tickFormatter={v => v + '%'} />
+                        <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: 11 }} />
+                        <Legend iconSize={8} wrapperStyle={{ fontSize: 11 }} />
+                        <Line yAxisId="left" type="monotone" dataKey="count" name="预警数" stroke="#3b82f6" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                        <Line yAxisId="right" type="monotone" dataKey="misreportRate" name="误报率%" stroke="#ef4444" strokeWidth={1.5} dot={false} strokeDasharray="4 2" activeDot={{ r: 4 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
+
       </div>
     </div>
   );

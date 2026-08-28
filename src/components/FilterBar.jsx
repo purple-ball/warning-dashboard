@@ -112,9 +112,11 @@ export default function FilterBar({
     });
   };
 
-  // 点击刷新按钮
-  const handleRefresh = () => {
-    window.location.reload();
+  const handleReset = () => {
+    setTempCity('全部');
+    setTempDistrict('全部');
+    setTempTown('全部');
+    setTempRoom('全部');
   };
 
   const districtOptions = getDistrictOptions();
@@ -124,88 +126,91 @@ export default function FilterBar({
   return (
     <div className="bg-blue-50 border-b border-blue-200 sticky top-0 z-10 shadow-sm">
       <div className="container mx-auto px-6 py-4">
-        <div className="flex gap-3 items-center flex-wrap">
-          <span className="text-gray-700 font-medium">筛选:</span>
+        <div className="flex items-center gap-3">
+          {/* Selects group - left aligned, fills available space */}
+          <div className="flex items-center gap-3 flex-1">
+            <span className="text-gray-700 font-medium text-sm whitespace-nowrap">筛选:</span>
 
-          {/* 地市 */}
-          <select
-            value={tempCity}
-            onChange={handleCityChange}
-            className="px-4 py-2 border border-blue-300 rounded-lg bg-white text-gray-800 cursor-pointer hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="全部">全部地市</option>
-            <option value="浙江省本级">浙江省本级</option>
-            {AREA_DATA.cities.map((city) => (
-              <option key={city.id} value={city.name}>
-                {city.name}
-              </option>
-            ))}
-          </select>
+            {/* 地市 */}
+            <select
+              value={tempCity}
+              onChange={handleCityChange}
+              className="flex-1 px-4 py-2 border border-blue-300 rounded-lg bg-white text-gray-800 cursor-pointer hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="全部">全部地市</option>
+              <option value="浙江省本级">浙江省本级</option>
+              {AREA_DATA.cities.map((city) => (
+                <option key={city.id} value={city.name}>
+                  {city.name}
+                </option>
+              ))}
+            </select>
 
-          {/* 区县（省本级时隐藏） */}
-          {!isProvLevel && (
-          <select
-            value={tempDistrict}
-            onChange={handleDistrictChange}
-            disabled={tempCity === '全部'}
-            className="px-4 py-2 border border-blue-300 rounded-lg bg-white text-gray-800 cursor-pointer hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-          >
-            <option value="全部">全部区县</option>
-            {districtOptions.map((district) => (
-              <option key={district.id} value={district.name}>
-                {district.name}
-              </option>
-            ))}
-          </select>
-          )}
+            {/* 区县（省本级时隐藏） */}
+            {!isProvLevel && (
+            <select
+              value={tempDistrict}
+              onChange={handleDistrictChange}
+              disabled={tempCity === '全部'}
+              className="flex-1 px-4 py-2 border border-blue-300 rounded-lg bg-white text-gray-800 cursor-pointer hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+            >
+              <option value="全部">全部区县</option>
+              {districtOptions.map((district) => (
+                <option key={district.id} value={district.name}>
+                  {district.name}
+                </option>
+              ))}
+            </select>
+            )}
 
-          {/* 乡镇/本级（省本级时直接用省本级谈话点；场景B时隐藏） */}
-          {!isNormalDistrict && (
-          <select
-            value={tempTown}
-            onChange={handleTownChange}
-            disabled={!isProvLevel && tempDistrict === '全部'}
-            className="px-4 py-2 border border-blue-300 rounded-lg bg-white text-gray-800 cursor-pointer hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-          >
-            <option value="全部">{isProvLevel ? '全部谈话点' : '全部乡镇/本级'}</option>
-            {townOptions.map((town) => (
-              <option key={town.id} value={town.name}>
-                {town.name}
-              </option>
-            ))}
-          </select>
-          )}
+            {/* 乡镇/本级（省本级时直接用省本级谈话点；场景B时隐藏） */}
+            {!isNormalDistrict && (
+            <select
+              value={tempTown}
+              onChange={handleTownChange}
+              disabled={!isProvLevel && tempDistrict === '全部'}
+              className="flex-1 px-4 py-2 border border-blue-300 rounded-lg bg-white text-gray-800 cursor-pointer hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+            >
+              <option value="全部">{isProvLevel ? '全部谈话点' : '全部乡镇/本级'}</option>
+              {townOptions.map((town) => (
+                <option key={town.id} value={town.name}>
+                  {town.name}
+                </option>
+              ))}
+            </select>
+            )}
 
-          {/* 谈话间 */}
-          <select
-            value={tempRoom}
-            onChange={handleRoomChange}
-            disabled={isNormalDistrict ? false : tempTown === '全部'}
-            className="px-4 py-2 border border-blue-300 rounded-lg bg-white text-gray-800 cursor-pointer hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-          >
-            <option value="全部">全部谈话间</option>
-            {roomOptions.map((room) => (
-              <option key={room} value={room}>
-                {room}
-              </option>
-            ))}
-          </select>
+            {/* 谈话间 */}
+            <select
+              value={tempRoom}
+              onChange={handleRoomChange}
+              disabled={isNormalDistrict ? false : tempTown === '全部'}
+              className="flex-1 px-4 py-2 border border-blue-300 rounded-lg bg-white text-gray-800 cursor-pointer hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+            >
+              <option value="全部">全部谈话间</option>
+              {roomOptions.map((room) => (
+                <option key={room} value={room}>
+                  {room}
+                </option>
+              ))}
+            </select>
+          </div>
 
-          {/* 确定按钮 */}
-          <button
-            onClick={handleConfirm}
-            className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
-          >
-            确定
-          </button>
-
-          {/* 刷新按钮 */}
-          <button
-            onClick={handleRefresh}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors ml-auto"
-          >
-            刷新
-          </button>
+          {/* Buttons - right aligned */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={handleConfirm}
+              className="px-5 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            >
+              确定
+            </button>
+            <button
+              onClick={handleReset}
+              className="px-5 py-2 bg-white text-blue-600 text-sm border border-blue-400 rounded-lg hover:bg-blue-50 transition-colors font-medium"
+            >
+              重置
+            </button>
+          </div>
         </div>
       </div>
     </div>
